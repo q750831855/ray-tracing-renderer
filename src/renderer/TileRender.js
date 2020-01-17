@@ -19,8 +19,6 @@ export function makeTileRender(gl) {
   let columns;
   let rows;
 
-  let firstTileTime = 0;
-
   let width = 0;
   let height = 0;
 
@@ -29,19 +27,27 @@ export function makeTileRender(gl) {
   // adjusted dynamically according to system performance
   let pixelsPerTile = pixelsPerTileEstimate(gl);
 
-  let pixelsPerTileQuantized = pixelsPerTile;
-
   let desiredTimePerTile = 20;
 
-  let timePerPixel = desiredTimePerTile / pixelsPerTile;
+  let lastTime = 0;
+  let timeElapsed = 0;
 
-  function restartTimer() {
-    firstTileTime = 0;
+  function onFinished(time) {
+    if (lastTime) {
+      timeElapsed += time - lastTime;
+    }
+
+    lastTime = time;
+  }
+
+  function updatePerf() {
+    requestAnimationFrame(onFinished);
   }
 
   function reset() {
     currentTile = -1;
-    firstTileTime = 0;
+    timeElapsed = 0;
+    lastTime = 0;
   }
 
   function setSize(w, h) {
@@ -50,13 +56,13 @@ export function makeTileRender(gl) {
     reset();
   }
 
+
   function setTileDimensions(pixelsPerTile) {
     const aspectRatio = width / height;
 
     // quantize the width of the tile so that it evenly divides the entire window
     tileWidth = Math.ceil(width / Math.round(width / Math.sqrt(pixelsPerTile * aspectRatio)));
     tileHeight = Math.ceil(tileWidth / aspectRatio);
-    pixelsPerTileQuantized = tileWidth * tileHeight;
 
     columns = Math.ceil(width / tileWidth);
     rows = Math.ceil(height / tileHeight);
@@ -64,20 +70,16 @@ export function makeTileRender(gl) {
   }
 
   function initTiles() {
-    if (firstTileTime) {
-      const timeElapsed = Date.now() - firstTileTime;
+    if (timeElapsed) {
       const timePerTile = timeElapsed / numTiles;
 
       const expAvg = 0.5;
 
       const newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
       pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
-
-      const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
-      timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
     }
 
-    firstTileTime = Date.now();
+    timeElapsed = 0;
 
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
 
@@ -106,13 +108,10 @@ export function makeTileRender(gl) {
   }
 
   return {
-    getTimePerPixel() {
-      return timePerPixel;
-    },
     nextTile,
     reset,
-    restartTimer,
-    setSize
+    setSize,
+    updatePerf,
   };
 }
 
